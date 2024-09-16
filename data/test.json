@@ -1,0 +1,61 @@
+[
+    {
+        "type": "flight_schedule",
+        "data": {
+            "airline": "American Airlines",
+            "flight_number": "AA789",
+            "departure_city": "New York",
+            "arrival_city": "Paris",
+            "departure_time": "2024-03-20T10:00:00",
+            "arrival_time": "2024-03-20T22:00:00",
+            "duration": "8h"
+        }
+    },
+    {
+        "type": "hotel_availability",
+        "data": {
+            "hotel_name": "The Ritz Paris",
+            "location": "Paris",
+            "check_in_date": "2024-04-01",
+            "check_out_date": "2024-04-07",
+            "available_rooms": 5,
+            "price_per_night": 400,
+            "rating": 5.0
+        }
+    },
+    {
+        "type": "travel_advisory",
+        "data": {
+            "country": "France",
+            "advisory": "Strikes affecting public transportation in Paris. Plan accordingly.",
+            "date_issued": "2024-03-10"
+        }
+    },
+    {
+        "type": "user_review",
+        "data": {
+            "hotel_name": "The Ritz Paris",
+            "location": "Paris",
+            "reviewer_name": "Bob Johnson",
+            "review_date": "2024-04-04",
+            "rating": 5,
+            "review_text": "An extraordinary experience! Everything from the service to the room was perfect."
+        }
+    },
+    {
+        "type": "travel_guide",
+        "data": {
+            "city": "Paris",
+            "attractions": [
+                "Eiffel Tower",
+                "Louvre Museum",
+                "Notre-Dame Cathedral"
+            ],
+            "recommended_restaurants": [
+                "Le Jules Verne",
+                "Le Meurice",
+                "Cafe de Flore"
+            ]
+        }
+    }
+]

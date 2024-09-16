@@ -1,0 +1,61 @@
+[
+    {
+        "type": "flight_schedule",
+        "data": {
+            "airline": "Delta Airlines",
+            "flight_number": "DL456",
+            "departure_city": "Los Angeles",
+            "arrival_city": "Tokyo",
+            "departure_time": "2024-01-10T17:00:00",
+            "arrival_time": "2024-01-11T21:00:00",
+            "duration": "12h"
+        }
+    },
+    {
+        "type": "hotel_availability",
+        "data": {
+            "hotel_name": "Hotel Imperial",
+            "location": "Kyoto",
+            "check_in_date": "2024-02-05",
+            "check_out_date": "2024-02-10",
+            "available_rooms": 10,
+            "price_per_night": 150,
+            "rating": 4.8
+        }
+    },
+    {
+        "type": "travel_advisory",
+        "data": {
+            "country": "Japan",
+            "advisory": "Heavy snowfall expected in northern regions. Travel disruptions possible.",
+            "date_issued": "2024-01-05"
+        }
+    },
+    {
+        "type": "user_review",
+        "data": {
+            "hotel_name": "Hotel Imperial",
+            "location": "Kyoto",
+            "reviewer_name": "Alice Smith",
+            "review_date": "2024-02-08",
+            "rating": 4,
+            "review_text": "Great location and service. The room was clean but a bit small."
+        }
+    },
+    {
+        "type": "travel_guide",
+        "data": {
+            "city": "Tokyo",
+            "attractions": [
+                "Shibuya Crossing",
+                "Tokyo Tower",
+                "Sensoji Temple"
+            ],
+            "recommended_restaurants": [
+                "Sukiyabashi Jiro",
+                "Ramen Street",
+                "Ginza Sushi"
+            ]
+        }
+    }
+]
