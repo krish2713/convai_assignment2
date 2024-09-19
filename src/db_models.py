@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 
+# Initialize SQLAlchemy without associating it with an app just yet
 db = SQLAlchemy()
 
 class Flight(db.Model):
@@ -34,3 +35,4 @@ class TravelAdvisory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     country = db.Column(db.String(100), nullable=False)
     advisory = db.Column(db.Text, nullable=False)
+    advisory_date = db.Column(db.Date, nullable=False)
