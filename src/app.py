@@ -1,128 +1,153 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import os
-import spacy
-
-
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, Trainer, TrainingArguments
-
+import uuid
+import torch
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
 from db_models import db, Flight # Import the db instance from models
-from mock_data import flights_data,hotels_data,rental_cars_data,travel_advisories_data
-from service import retrieve_travelinfo
+from mock_data import create_mock_data
+from search_service import retrieve_travelinfo
+from booking_service import create_booking
+from intent_entities import classify_intent, extract_travel_entities
+import re
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
 
 def create_app():
+        # Check if GPU is available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # Load a pre-trained GPT-2 model and tokenizer
-    model = GPT2LMHeadModel.from_pretrained("gpt2")
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    # Load a pretrained spaCy NLP model (or transformers model for advanced use)
-    nlp = spacy.load("en_core_web_sm")
+    tokenizer = GPT2Tokenizer.from_pretrained("Aishrock006/chat_model")
+    #tokenizer = GPT2Tokenizer.from_pretrained("C:/Users/krish/Downloads/chat_model2")
+    
+    # Set a separate padding token to avoid warnings
+    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+        # Step 4: Load pre-trained GPT-2 model
+    model = GPT2LMHeadModel.from_pretrained("Aishrock006/chat_model")
+    #model = GPT2Tokenizer.from_pretrained("C:/Users/krish/Downloads/chat_model2")
+
+    # Resize the model embeddings to accommodate the new [PAD] token
+    model.resize_token_embeddings(len(tokenizer))
+
+    model.to(device)
+
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///travel_info.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
- 
-    def init_db():
-        db.create_all()
-        db.session.add_all(flights_data)
-        db.session.add_all(hotels_data)
-        db.session.add_all(rental_cars_data)
-        db.session.add_all(travel_advisories_data)
-        db.session.commit()
+    session = {}
+    session['user_id'] = str(uuid.uuid4())
+    session['chat_history'] = []
 
+    lemmatizer = WordNetLemmatizer()
+        
+    # Download stopwords and wordnet for lemmatization
+    nltk.download('stopwords')
+    nltk.download('wordnet')
+    nltk.download('omw-1.4')
+    stop_words = set(stopwords.words('english'))
+   
     # Initialize the app with SQLAlchemy
     with app.app_context():
         # Check if the SQLite database file exists (for SQLite only)
         if not os.path.exists(app.instance_path+'/travel_info.db'):
             print("Database does not exist, creating...")
             # Create all tables
-            init_db()
+            db.create_all()
+            create_mock_data()
             print("Database and tables created.")
         else:
             print("Database already exists.")
 
-    # Generate a response using GPT-2
-    def generate_response(user_input, context_data):
-        # Prepare and tokenize the prompt
-        prompt = prepare_prompt(user_input, context_data)
-        inputs = tokenize_prompt(prompt)
+    def preprocess_text(text):
+        # Convert to lowercase
+        text = text.lower()
 
-        # Generate output from GPT-2
-        output = model.generate(**inputs, max_length=1024, do_sample=True, temperature=0.7)
-        
-        # Decode the output tokens back into text
-        response = tokenizer.decode(output[0], skip_special_tokens=True)
-        return response
+        # Remove special characters and numbers
+        text = re.sub(r'[^a-z\s]', '', text)
+
+        # Tokenize the text
+        words = text.split()
+
+        # Remove stopwords and lemmatize
+        words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
+
+        # Join the words back into a single string
+        return ' '.join(words)
     
-    def extract_travel_entities(user_input):
-        doc = nlp(user_input)
-        entities = {
-            "departure_city": None,
-            "destination_city": None,
-            "checkin_date": None,
-            "checkout_date": None,
-            "departure_date": None,
-            "return_date": None,
-            "pickup_date": None,
-            "dropoff_date": None,
-            "organization": None,
-            "country": None,  # For travel advisory
-            "price": None
-        }
+    # def generate_response(prompt, device):
+    #     # Tokenize input prompt, generating both input_ids and attention_mask
+    #     inputs = tokenizer(preprocess_text(prompt), return_tensors='pt', padding=True).to(device)
         
-        for ent in doc.ents:
-            if ent.label_ == 'GPE':
-                if not entities["departure_city"]:
-                    entities["departure_city"] = ent.text  # Assume first GPE is the departure city
-                else:
-                    entities["destination_city"] = ent.text  # Assume second GPE is the destination
-            elif ent.label_ == 'DATE':
-                # Assign dates based on context
-                if "check-in" in user_input or "hotel" in user_input:
-                    if not entities["checkin_date"]:
-                        entities["checkin_date"] = ent.text
-                    else:
-                        entities["checkout_date"] = ent.text
-                elif "departure" in user_input or "flight" in user_input:
-                    if not entities["departure_date"]:
-                        entities["departure_date"] = ent.text
-                    else:
-                        entities["return_date"] = ent.text
-                elif "pickup" in user_input or "rental car" in user_input:
-                    if not entities["pickup_date"]:
-                        entities["pickup_date"] = ent.text
-                    else:
-                        entities["dropoff_date"] = ent.text
-            elif ent.label_ == 'ORG':
-                entities["organization"] = ent.text  # Airlines, car rental companies, etc.
-            elif ent.label_ == 'MONEY':
-                entities["price"] = ent.text  # For price extraction
-            elif ent.label_ == 'GPE':
-                entities["country"] = ent.text  # Travel advisory country
+    #     input_ids = inputs['input_ids']
+    #     attention_mask = inputs['attention_mask']
 
-        return entities
+    #     # Move the model to the same device
+    #     model.to(device)
 
-    def classify_intent(user_input):
-        if "flight" in user_input.lower() or "fly" in user_input.lower():
-            return "book_flight"
-        elif "hotel" in user_input.lower():
-            return "book_hotel"
-        elif "advisory" in user_input.lower() or "travel advisory" in user_input.lower():
-            return "travel_advisory"
-        elif "hotel" in user_input.lower():
-            return "rent_car"
-        else:
-            return "unknown"
+    #     # Generate a response with strict control over length and sampling
+    #     outputs = model.generate(
+    #         input_ids,
+    #         attention_mask=attention_mask,  # Use the attention mask to handle padding
+    #         max_length=50,  # Restrict the length of the response
+    #         num_return_sequences=1,  # Ensure only one response is generated
+    #         temperature=0.7,  # Lower temperature for more deterministic responses
+    #         top_k=10,  # Limit the number of tokens considered
+    #         top_p=0.85,  # Nucleus sampling with a cumulative probability
+    #         repetition_penalty=1.2,  # Penalize repeated phrases
+    #         pad_token_id=tokenizer.eos_token_id,  # EOS token for padding
+    #         do_sample=True  # Enable sampling for more diverse responses
+    #     )
 
-    # Example of combining user input and retrieved context into a single prompt
-    def prepare_prompt(user_input, context_data):
-        context_text = "\n".join(context_data)
-        prompt = f"You are a travel assistant. The user asked: '{user_input}'.\n\nHere is the information retrieved:\n{context_text}\n\nPlease assist the user based on this information."
-        return prompt
+    #     # Decode the response
+    #     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-    # Tokenize the prompt for GPT-2
-    def tokenize_prompt(prompt):
-        inputs = tokenizer(prompt, return_tensors='pt', max_length=1024, truncation=True)
-        return inputs
+    #     # Optionally, return only the first reply from the agent
+    #     if "agent" in response:
+    #         response = response.split("agent")[-1].strip()  # Keep only the agent's first reply
+
+    #     return response
+
+    #Generate a response using GPT-2
+    def generate_response(context_data):
+        # Prepare and tokenize the prompt
+        ctx = " ".join(context_data)
+        # Truncate the string to the last 1000 characters
+        prompt = f"{ctx} Agent:"
+        print(f"prompt: {prompt}")
+        inputs = tokenizer.encode(prompt, return_tensors='pt').to(device)
+
+        # Generate a response with strict control over length and sampling
+        outputs = model.generate(
+        inputs,
+        max_new_tokens=30, # Restrict the length of the response to one reply
+        num_return_sequences=1, # Ensure only one response is generated
+        temperature=0.5, # Lower temperature for more deterministic responses
+        top_k=10, # Limit the number of tokens considered
+        top_p=0.85, # Nucleus sampling with a cumulative probability
+        repetition_penalty=1.2, # Penalize repeated phrases
+        pad_token_id=tokenizer.eos_token_id, # EOS token for padding
+        do_sample=False # Disable sampling for a deterministic output
+        )
+
+        # Decode the response
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        response = response.replace("'", "").replace('"', '')
+        print(f"response: {response}")
+
+        # Return only the first reply from the agent
+        # Ensure that it stops after the first "Agent:" prompt
+        if "Agent:" in response:
+            response = response.split("Agent:")[-1].strip() # Keep only the agent's first reply
+
+        # Alternatively, stop at the first period if it's part of the sentence structure
+        response = response.split(".")[0].strip() + "," # Stop at first full stop
+        return response
 
     @app.route('/chat', methods=['POST'])
     def chat():
@@ -130,17 +155,37 @@ def create_app():
         user_input = data.get('message', '')
         # Get intent and entities
         intent = classify_intent(user_input)
+        print(f"intent: {intent}")
         entities = extract_travel_entities(user_input)
-        context_data = retrieve_travelinfo(intent,entities)
-        response = generate_response(user_input,context_data)
+        context_data=""
+        if(intent.startswith("Search") or intent.startswith("Travel")):
+            context_data = retrieve_travelinfo(intent,entities,session['user_id'])
+        elif(intent.startswith("Book") or intent.startswith("Cancel") or intent.startswith("Get")):
+            context_data = create_booking(intent,entities,session['user_id'])
+        print(f"retrieved context_info from db: {context_data}")
+         # Add the user's message to the chat history
+        session['chat_history'].append(f"customer: {user_input}")
+        if context_data:
+            # Add the bot's response to the chat history
+            session['chat_history'].append(f"agent: {context_data}")
+        response = generate_response(session['chat_history'])
+        # Add the bot's response to the chat history
+        session['chat_history'].append(f"agent: {response}")
+        session['chat_history'] = session['chat_history'][-10:]
         return jsonify({'response': response})
     
-
     @app.route('/flights')
     def get_flights():
         flights = Flight.query.all()
-        flights_data = [{"airline": flight.airline, "departure": flight.departure, "destination": flight.destination} for flight in flights]
+        flights_data = [{"airline": flight.airline, "departure": flight.departure, "destination": flight.destination, "departure_time": flight.departure_time} for flight in flights]
         return jsonify(flights=flights_data)
+    
+    @app.route('/get_history', methods=['GET'])
+    def get_history():
+        # Retrieve the chat history from the session
+        chat_history = session['chat_history']
+        print(f"chat_history: {chat_history}")
+        return jsonify(chat_history)
     
     return app
 if __name__ == '__main__':
