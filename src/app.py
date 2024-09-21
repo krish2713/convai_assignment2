@@ -164,7 +164,7 @@ def create_app():
             context_data = create_booking(intent,entities,session['user_id'])
         print(f"retrieved context_info from db: {context_data}")
          # Add the user's message to the chat history
-        session['chat_history'].append(f"customer: {user_input}")
+        session['chat_history'].append(f"Customer: {user_input}")
         if context_data:
             # Add the bot's response to the chat history
             session['chat_history'].append(f"agent: {context_data}")
