@@ -1,1 +1,1 @@
-# convai_assignment2
+SLM with RAG
