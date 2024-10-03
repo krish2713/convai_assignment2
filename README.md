@@ -1,1 +1,1 @@
-SLM with RAG
+SLM with relational db as RAG
